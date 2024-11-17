@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recycle Object Prediction</title>
+    <style>
+        /* Basic Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            color: #bb86fc;
+        }
+
+        /* Split Screen Layout */
+        .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 1200px;
+            height: 70vh;
+            gap: 30px;
+        }
+
+        /* Webcam Section */
+        #webcam-container {
+            width: 45%;
+            background-color: #333;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        #webcam {
+            border: 4px solid #bb86fc;
+            border-radius: 10px;
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        /* Results Section */
+        #results-container {
+            width: 45%;
+            background-color: #333;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        #result {
+            font-size: 2em;
+            font-weight: bold;
+            color: #03dac5;
+        }
+
+        #confidence {
+            font-size: 1.5em;
+            color: #ff4081;
+            margin-top: 10px;
+        }
+
+        #buttons-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        button {
+            margin: 10px;
+            padding: 12px 20px;
+            font-size: 1.1em;
+            background-color: #03dac5;
+            color: #121212;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #bb86fc;
+            transform: scale(1.05);
+        }
+
+        button:active {
+            background-color: #3700b3;
+            transform: scale(1);
+        }
+
+        /* Responsive Styling */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                height: auto;
+                align-items: center;
+            }
+
+            #webcam-container, #results-container {
+                width: 80%;
+                margin-bottom: 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            button {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Recycle Object Prediction</h1>
+    <div class="container">
+        <div id="webcam-container">
+            <video id="webcam" autoplay></video>
+        </div>
+        <div id="results-container">
+            <div id="result"></div>
+            <div id="confidence"></div>
+            <div id="buttons-container">
+                <button id="predict-button">Predict</button>
+                <button id="refresh-button">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script>
+        let model, webcam, resultElement, confidenceElement;
+
+        // Load the Teachable Machine model
+        async function loadModel() {
+            try {
+                model = await tmImage.load('./model/model.json', './model/metadata.json');
+                console.log('Model loaded successfully');
+            } catch (error) {
+                console.error('Error loading the model:', error);
+                alert('Failed to load the model. Please check the model files and try again.');
+            }
+        }
+
+        // Set up the webcam stream
+        async function setupWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                webcam.srcObject = stream;
+                webcam.onloadedmetadata = () => {
+                    console.log('Webcam initialized successfully');
+                };
+            } catch (error) {
+                console.error('Error accessing the webcam:', error);
+                alert('Unable to access the webcam. Please check your browser permissions and ensure the camera is connected.');
+            }
+        }
+
+        // Function to make a prediction
+        async function predict() {
+            if (!model) {
+                console.error('Model is not loaded yet.');
+                alert('Model is not loaded. Please wait and try again.');
+                return;
+            }
+
+            if (!webcam || webcam.readyState !== 4) {
+                console.error('Webcam is not ready yet.');
+                alert('Webcam is not ready. Please wait and try again.');
+                return;
+            }
+
+            try {
+                // Directly use the webcam video element for prediction
+                const predictions = await model.predict(webcam);
+
+                // Extract the class label with the highest probability
+                const classIndex = predictions.reduce((maxIndex, currentPrediction, index, arr) => {
+                    return currentPrediction.probability > arr[maxIndex].probability ? index : maxIndex;
+                }, 0);
+
+                // Define the class names
+                const classNames = ['Recyclable', 'Non-Recyclable'];
+
+                // Show the prediction and confidence score
+                resultElement.innerText = `Prediction: ${classNames[classIndex]}`;
+                confidenceElement.innerText = `Confidence: ${(predictions[classIndex].probability * 100).toFixed(2)}%`;
+
+                console.log('Prediction made successfully');
+            } catch (error) {
+                console.error('Error during prediction:', error);
+                alert('An error occurred while making the prediction. Please try again.');
+            }
+        }
+
+        // Function to refresh the webcam and reset the result
+        function refresh() {
+            // Reset result text and confidence
+            resultElement.innerText = '';
+            confidenceElement.innerText = '';
+
+            // Stop the webcam stream and restart it
+            const stream = webcam.srcObject;
+            const tracks = stream.getTracks();
+            tracks.forEach(track => track.stop());
+            setupWebcam(); // Reinitialize webcam
+        }
+
+        // Initialize the application
+        async function init() {
+            try {
+                webcam = document.getElementById('webcam');
+                resultElement = document.getElementById('result');
+                confidenceElement = document.getElementById('confidence');
+
+                await loadModel();
+                await setupWebcam();
+
+                document.getElementById('predict-button').addEventListener('click', predict);
+                document.getElementById('refresh-button').addEventListener('click', refresh);
+                console.log('Application initialized successfully');
+            } catch (error) {
+                console.error('Error during initialization:', error);
+                alert('Failed to initialize the application. Please check the console for more details.');
+            }
+        }
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html>
